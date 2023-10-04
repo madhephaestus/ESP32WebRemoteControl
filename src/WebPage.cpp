@@ -5,8 +5,7 @@
 #include "static/static.h"
 
 #include <ESPAsyncWebServer/ESPAsyncWebServer.h>
-#include "Motor.h"
-#include "RBE1001Lib.h"
+
 #include <stdio.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
@@ -178,13 +177,6 @@ void updateTask(void *param){
 		thisPage->sendHeartbeat();
 		thisPage->SendAllLabels();
 		thisPage->SendAllValues();
-		if (thisPage->updatePID){
-			for(int i=0; i<MAX_POSSIBLE_MOTORS; i++){
-			 thisPage-> SendPIDValues(i);
-			 thisPage->SendSetpoint(i);
-			}
-			thisPage->updatePID=false;
-		}
 		//while (thisPage->sendPacketFromQueue());
 		unlock();
 
@@ -220,47 +212,9 @@ void WebPage::initalize(){
 
 		Serial.print("args: ");
 		Serial.println(request->args());
-		for(int i=0; i<request->args(); i++){
-			String key = request->argName(i);
-			if (key.length()>=2){
-				int32_t index = key.substring(1).toInt()-1;
-				if (index!=-1 && index<MAX_POSSIBLE_MOTORS && Motor::list[index] != NULL){
 
-					float value = request->arg(i).toFloat();
-					if (key.charAt(0)=='p'){
-						Serial.print("Setting P Gain ");
-						Serial.print(index);
-						Serial.print(":\t");
-						Serial.println(value);
-						Motor::list[index]->setGainsP(value);
-					}
-					if (key.charAt(0)=='i'){
-						Serial.print("Setting I Gain ");
-						Serial.print(index);
-						Serial.print(":\t");
-						Serial.println(value);
-						Motor::list[index]->setGainsI(value);
-					}
-					if (key.charAt(0)=='d'){
-						Serial.print("Setting D Gain ");
-						Serial.print(index);
-						Serial.print(":\t");
-						Serial.println(value);
-						Motor::list[index]->setGainsD(value);
-					}
-				}
-			}
-		}
 		String pidvals="[";
-		for(int i=0; i<MAX_POSSIBLE_MOTORS; i++){
 
-			if(Motor::list[i] != NULL){
-				if (i!=0) pidvals+=",";
-				pidvals+="["+String(Motor::list[i]->getGainsP())+
-						","+String(Motor::list[i]->getGainsI())+
-						","+String(Motor::list[i]->getGainsD())+"]";
-			}
-		}
 		pidvals += "]";
 		request->send(200, "text/html", pidvals);
 		unlock();
@@ -613,57 +567,6 @@ void WebPage::printToWebConsole(String data){
 
 }
 
-void WebPage::UpdatePIDValues(uint32_t motor,float p, float i, float d){
-	if (motor<MAX_POSSIBLE_MOTORS && Motor::list[motor] != NULL){
-		Motor::list[motor]->setGainsP(p);
-		Motor::list[motor]->setGainsI(i);
-		Motor::list[motor]->setGainsD(d);
-	}
-}
-
-void WebPage::UpdateSetpoint(uint32_t motor, float setpoint){
-	if (motor<MAX_POSSIBLE_MOTORS && Motor::list[motor] != NULL){
-		Motor::list[motor]->setSetpoint(setpoint);
-	}
-}
-
-bool WebPage::SendPIDValues(uint32_t motor){
-	//pidsetBuffer;
-	//return false;
-	if (ws.count()==0) return false;
-
-	if (motor<MAX_POSSIBLE_MOTORS && Motor::list[motor] != NULL){
-		uint8_t *  pidsetBuffer = new uint8_t[20];
-		uint32_t *bufferAsInt32=(uint32_t*)pidsetBuffer;
-		float *bufferAsFloat=(float*)pidsetBuffer;
-		bufferAsInt32[0]=0x00000060;
-		bufferAsInt32[1]=motor;
-		bufferAsFloat[2]=Motor::list[motor]->getGainsP();
-		bufferAsFloat[3]=Motor::list[motor]->getGainsI();
-		bufferAsFloat[4]=Motor::list[motor]->getGainsD();
-		return sendPacket(pidsetBuffer,20);
-	}
-	return false;
-
-}
-
-bool WebPage::SendSetpoint(uint32_t motor){
-	//setpointsetBuffer;
-	//return false;
-
-
-	if (motor<MAX_POSSIBLE_MOTORS && Motor::list[motor] != NULL){
-		uint8_t * setpointsetBuffer = new uint8_t[12];
-		uint32_t *bufferAsInt32=(uint32_t*)setpointsetBuffer;
-		float *bufferAsFloat=(float*)setpointsetBuffer;
-		bufferAsInt32[0]=0x00000061;
-		bufferAsInt32[1]=motor;
-		bufferAsFloat[2]=Motor::list[motor]->getCurrentDegrees();
-		return sendPacket(setpointsetBuffer,12);
-	}
-	return false;
-
-}
 
 
 bool WebPage::sendPacket(unsigned char* packet, uint32_t length){

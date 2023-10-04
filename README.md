@@ -13,6 +13,7 @@ A library to support introduction to robotics engineering.
 * Preferences 1.0
 * WebServer 1.0
 * WiFi 1.0
+* AsyncTCP 1.1.4
 
 # WiFi RC control
 

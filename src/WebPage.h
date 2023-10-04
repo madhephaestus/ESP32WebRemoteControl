@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <WebServer.h>
-#include "Motor.h"
+
 #define labelbuflen 256
 #define valbuflen (sizeof(float)*3)
 typedef struct _JoyData {
@@ -71,11 +71,6 @@ public:
 	bool sendHeartbeat();
 	void setHeartbeatUUID(uint32_t uuid);
 
-	void UpdatePIDValues(uint32_t motor,float p, float i, float d);
-	void UpdateSetpoint(uint32_t motor, float setpoint);
-
-	bool SendPIDValues(uint32_t motor);
-	bool SendSetpoint(uint32_t motor);
 
 	bool sendPacket(unsigned char* packet, uint32_t length);
 
