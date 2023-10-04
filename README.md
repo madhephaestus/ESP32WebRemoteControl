@@ -1,15 +1,12 @@
-# RBE1001Lib
+# ESP32WebRemoteControl 
 A library to support introduction to robotics engineering. 
 
 # Documentation by Doxygen
 
-[RBE1001Lib Doxygen](https://wpiroboticsengineering.github.io/RBE1001Lib/annotated.html)
+[ESP32WebRemoteControl  Doxygen](https://madhephaestus.github.io/ESP32WebRemoteControl/annotated.html)
 
 # Depenancies
 
-* ESP32Servo 0.9.0
-* ESP32AnalogRead 0.0.5
-* ESP32Encoder 0.3.8
 * Esp32WifiManager 0.12.0
 * ESPmDNS 1.0
 * FS  1.0
