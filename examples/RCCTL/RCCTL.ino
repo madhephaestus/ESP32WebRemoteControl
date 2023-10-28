@@ -1,30 +1,20 @@
 #include <Arduino.h>
-#include <RBE1001Lib.h>
-#include "Motor.h"
-#include "Rangefinder.h"
+#include <WiFi.h> 
+#include <ESP32WebRemoteControl.h>
 #include <ESP32Servo.h>
-#include <ESP32AnalogRead.h>
 #include <Esp32WifiManager.h>
 #include "wifi/WifiManager.h"
 #include "WebPage.h"
-#include <Timer.h>
+#include <WiiChuck.h>
 
-// https://wpiroboticsengineering.github.io/RBE1001Lib/classMotor.html
-LeftMotor left_motor;
-RightMotor right_motor;
-// https://wpiroboticsengineering.github.io/RBE1001Lib/classRangefinder.html
-Rangefinder rangefinder1;
-// https://wpiroboticsengineering.github.io/RBE1001Lib/classServo.html
-Servo lifter;
-// https://wpiroboticsengineering.github.io/RBE1001Lib/classESP32AnalogRead.html
-ESP32AnalogRead leftLineSensor;
-ESP32AnalogRead rightLineSensor;
-ESP32AnalogRead servoPositionFeedback;
-
+Servo m1;
+Servo m2;
+Servo m3;
+Servo m4;
 WebPage control_page;
 
 WifiManager manager;
-
+Accessory nunchuck1;
 /*
  * This is the standard setup function that is called when the ESP32 is rebooted
  * It is used to initialize anything that needs to be done once.
@@ -65,26 +55,43 @@ WifiManager manager;
  * NOTE you can use this class in your final project code to visualize the state of your system while running wirelessly.
  */
 int inc = 0;
-int timerTime=0;
-void setup()
-{
-	manager.setup(); // Connect to an infrastructure network first, then fail over to AP mode
-	//manager.setupAP();// Launch AP mode first, then fail over to connecting to a station
-	while (manager.getState() != Connected)
-	{
-		manager.loop();
-		delay(1);
-	}
-	ESP32PWM::allocateTimer(1); // Used by servos
+int timerTime = 0;
+void setup() {
+	ESP32PWM::allocateTimer(0);  // Used by servos
+	m1.attach(14);
+	m2.attach(25);
+	m3.attach(26);
+  m4.attach(12);
 
-	// pin definitions https://wpiroboticsengineering.github.io/RBE1001Lib/RBE1001Lib_8h.html#define-members
-	rangefinder1.attach(SIDE_ULTRASONIC_TRIG, SIDE_ULTRASONIC_ECHO);
-	lifter.attach(SERVO_PIN);
-	leftLineSensor.attach(LEFT_LINE_SENSE);
-	rightLineSensor.attach(RIGHT_LINE_SENSE);
-	servoPositionFeedback.attach(SERVO_FEEDBACK_SENSOR);
-	lifter.write(0);
-	control_page.initalize();	  // Init UI after everything else.
+	m1.write(90);
+	m2.write(90);
+	m3.write(90);
+  m4.write(90);
+	//manager.setup();  // Connect to an infrastructure network first, then fail over to AP mode
+	manager.setupAP(); // Launch AP mode first, then fail over to connecting to a station
+	 while (manager.getState() != Connected) {
+	 	manager.loop();
+	 	delay(10);
+
+	}
+	delay(100);
+	Serial.println("Wifi Connected!");
+	//control_page.initalize();  // Init UI after everything else.
+	Serial.println("Starting the Web Control");
+	timerTime=millis()+100;
+  nunchuck1.begin();
+	if (nunchuck1.type == Unknown) {
+		/** If the device isn't auto-detected, set the type explicatly
+		 * 	NUNCHUCK,
+		 WIICLASSIC,
+		 GuitarHeroController,
+		 GuitarHeroWorldTourDrums,
+		 DrumController,
+		 DrawsomeTablet,
+		 Turntable
+		 */
+		nunchuck1.type = NUNCHUCK;
+	}
 }
 
 /*
@@ -95,15 +102,52 @@ void setup()
  * that is zeroed when the state begins. It is compared with the number of
  * milliseconds the robot should reamain in that state.
  */
-void runStateMachine()
-{
+ float fmap(float x, float in_min, float in_max, float out_min, float out_max) {
+    const float run = in_max - in_min;
+    if(run == 0){
+        log_e("map(): Invalid input range, min == max");
+        return -1; // AVR returns -1, SAM returns 0
+    }
+    const float rise = out_max - out_min;
+    const float delta = x - in_min;
+    return (delta * rise) / run + out_min;
+}
+void runStateMachine() {
 
-	float left = (control_page.getJoystickX() - control_page.getJoystickY()) * 180;
-	float right = (control_page.getJoystickX() + control_page.getJoystickY()) * 180;
+	float x =0;// control_page.getJoystickX();
+	float y = 0;//control_page.getJoystickY();
 
-	left_motor.setSpeed(left);
-	right_motor.setSpeed(right);
-	lifter.write(control_page.getSliderValue(0) * 180);
+	float slide =0;
+  nunchuck1.readData();    // Read inputs and update maps
+	// nunchuck1.printInputs(); // Print all inputs
+	// for (int i = 0; i < WII_VALUES_ARRAY_SIZE; i++) {
+	// 	Serial.println(
+	// 			"Controller Val " + String(i) + " = "
+	// 					+ String((uint8_t) nunchuck1.values[i]));
+      
+	// }
+  long buttons = 0;
+  long mouth = 40;
+  if(nunchuck1.values[10]>0){
+    buttons=90;
+  }
+  if(nunchuck1.values[11]>0){
+    mouth=120;
+  }
+  slide = fmap(buttons,0,255,-1.0,1.0);
+  x= -fmap(nunchuck1.values[0],0,255,-1.0,1.0);
+  y= -fmap(nunchuck1.values[1],0,255,-1.0,1.0);
+  //slide = control_page.getSliderValue(0);
+	int offset = slide * 20 ;
+  int scale =30;
+  //Serial.println(String(offset));
+	int m1val = offset + (90) +(x*-scale);
+	int m2val = offset + (90)+(x*scale*cos(-120))+(y*scale*sin(-120));
+	int m3val = offset + (90)+(x*scale*cos(-120))+(y*scale*sin(120));
+	m1.write(m1val);
+	m2.write(m2val);
+	m3.write(m3val);
+  m4.write(mouth);
 }
 
 /*
@@ -114,20 +158,11 @@ void runStateMachine()
  */
 
 uint32_t packet_old = 0;
-void updateDashboard()
-{
+void updateDashboard() {
 	// This writes values to the dashboard area at the bottom of the web page
-	if ((timerTime+100)>millis())
-	{
-
-		control_page.setValue("Left linetracker", leftLineSensor.readMiliVolts());
-		control_page.setValue("Right linetracker",
-							  rightLineSensor.readMiliVolts());
-		control_page.setValue("Ultrasonic",
-							  rangefinder1.getDistanceCM());
-
-		control_page.setValue("Simple Counter",
-							  inc++);
+	if ((timerTime + 100) > millis()) {
+		//Serial.println("Update dashboard");
+		control_page.setValue("Simple Counter", inc++);
 		//if(control_page.getJoystickMagnitude()>0.1)
 		//Serial.println("Joystick angle="+String(control_page.getJoystickAngle())+
 		//		" magnitude="+String(control_page.getJoystickMagnitude())+
@@ -136,28 +171,15 @@ void updateDashboard()
 		//						" slider="+String(control_page.getSliderValue(0)));
 
 		control_page.setValue("packets from Web to ESP",
-							  control_page.rxPacketCount);
+				control_page.rxPacketCount);
 
-		control_page.setValue("slider",
-							  control_page.getSliderValue(0) * 100);
-
-		control_page.setValue("Left Encoder Degrees", left_motor.getCurrentDegrees());
-		control_page.setValue("Left Effort", (int)left_motor.getEffortPercent());
-		control_page.setValue("Left Encoder Degrees/sec", left_motor.getDegreesPerSecond());
-
-		control_page.setValue("Right Encoder Degrees", right_motor.getCurrentDegrees());
-		control_page.setValue("Right  Effort", (int)right_motor.getEffortPercent());
-		control_page.setValue("Free Ram", esp_get_free_heap_size());
-		control_page.setValue("Right Encoder Degrees/sec", right_motor.getDegreesPerSecond());
-
-		control_page.setValue("Simple Counter",
-							  inc++);
+		control_page.setValue("Simple Counter", inc++);
 		control_page.setValue("packets from Web to ESP",
-							  control_page.rxPacketCount);
+				control_page.rxPacketCount);
 		control_page.setValue("packets to Web from ESP",
-							  control_page.txPacketCount);
+				control_page.txPacketCount);
 
-		timerTime=millis();
+		timerTime = millis();
 	}
 }
 
@@ -167,11 +189,11 @@ void updateDashboard()
  * dashboard data, and handle any web server requests.
  */
 
-void loop()
-{
+void loop() {
 
 	manager.loop();
-	runStateMachine();					 // do a pass through the state machine
-	if (manager.getState() == Connected) // only update if WiFi is up
-		updateDashboard();				 // update the dashboard values
+	runStateMachine();                    // do a pass through the state machine
+	if (manager.getState() == Connected)  // only update if WiFi is up
+		updateDashboard();                  // update the dashboard values
+	delay(1);
 }
