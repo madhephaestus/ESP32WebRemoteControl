@@ -14,7 +14,6 @@ Servo m4;
 WebPage control_page;
 
 WifiManager manager;
-Accessory nunchuck1;
 /*
  * This is the standard setup function that is called when the ESP32 is rebooted
  * It is used to initialize anything that needs to be done once.
@@ -79,19 +78,7 @@ void setup() {
 	//control_page.initalize();  // Init UI after everything else.
 	Serial.println("Starting the Web Control");
 	timerTime=millis()+100;
-  nunchuck1.begin();
-	if (nunchuck1.type == Unknown) {
-		/** If the device isn't auto-detected, set the type explicatly
-		 * 	NUNCHUCK,
-		 WIICLASSIC,
-		 GuitarHeroController,
-		 GuitarHeroWorldTourDrums,
-		 DrumController,
-		 DrawsomeTablet,
-		 Turntable
-		 */
-		nunchuck1.type = NUNCHUCK;
-	}
+
 }
 
 /*
@@ -114,11 +101,11 @@ void setup() {
 }
 void runStateMachine() {
 
-	float x =0;// control_page.getJoystickX();
-	float y = 0;//control_page.getJoystickY();
+	float x = control_page.getJoystickX();
+	float y = control_page.getJoystickY();
 
 	float slide =0;
-  nunchuck1.readData();    // Read inputs and update maps
+  //nunchuck1.readData();    // Read inputs and update maps
 	// nunchuck1.printInputs(); // Print all inputs
 	// for (int i = 0; i < WII_VALUES_ARRAY_SIZE; i++) {
 	// 	Serial.println(
@@ -128,15 +115,10 @@ void runStateMachine() {
 	// }
   long buttons = 0;
   long mouth = 40;
-  if(nunchuck1.values[10]>0){
-    buttons=90;
-  }
-  if(nunchuck1.values[11]>0){
-    mouth=120;
-  }
+ 
   slide = fmap(buttons,0,255,-1.0,1.0);
-  x= -fmap(nunchuck1.values[0],0,255,-1.0,1.0);
-  y= -fmap(nunchuck1.values[1],0,255,-1.0,1.0);
+  //x= -fmap(nunchuck1.values[0],0,255,-1.0,1.0);
+  //y= -fmap(nunchuck1.values[1],0,255,-1.0,1.0);
   //slide = control_page.getSliderValue(0);
 	int offset = slide * 20 ;
   int scale =30;
