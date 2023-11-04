@@ -10,6 +10,7 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "SPIFFS.h"
 
 AsyncWebServer server(80);
 AsyncWebSocket ws("/test");
@@ -30,11 +31,11 @@ void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventT
   uint32_t *asInt = (uint32_t *)data;
   float    *asFloat = (float *)data;
   if(type == WS_EVT_CONNECT){
-    //Serial.println("Websocket client connection received");
+    Serial.println("Websocket client connection received");
 	 thisPage->markAllDirty();
 	 thisPage->updatePID=true;
   } else if(type == WS_EVT_DISCONNECT){
-    //Serial.println("Client disconnected");
+    Serial.println("Client disconnected");
 
   } else if(type == WS_EVT_DATA){
 	  thisPage->rxPacketCount++;
@@ -149,12 +150,14 @@ WebPage::WebPage() {
 }
 
 bool isSafeToSend(){
+	vTaskDelay(100);
 	if(millis()-timeSinceLastSend>10){
 		return !lockOutSending;
 	}
 	return false;
 }
 void lock(){
+	vTaskDelay(100);
 	while(!isSafeToSend()){
 			//Serial.println("W daTA ");
 			delay(1);
@@ -162,6 +165,7 @@ void lock(){
 		lockOutSending=true;
 }
 void unlock(){
+	vTaskDelay(100);
 	timeSinceLastSend=millis();
 	//Serial.println("R data UnLock");
 	lockOutSending=false;
@@ -171,7 +175,6 @@ void unlock(){
 void updateTask(void *param){
 	//delay(1200);
 	while(1){
-
 		lock();
 		//Serial.println("L data Lock");
 		thisPage->sendHeartbeat();
@@ -188,9 +191,21 @@ void packetTXTask(void *param){
 }
 
 void WebPage::initalize(){
-	//ESP_LOGI("WebPage::WebPage","WebPage Init..");
+	ESP_LOGI("WebPage::WebPage","WebPage Init..");
+	ESP_LOGI("WebPage::WebPage","Copying files to FS");
+	if(!SPIFFS.begin(true)){
+      ESP_LOGI("WebPage::WebPage","An Error has occurred while mounting SPIFFS");
+      return;
+	}
+	for(int i=0; i<static_files_manifest_count; i++){
+		ESP_LOGI("WebPage::WebPage","Writing File '%s'",static_files_manifest[i].name);
+		File file = SPIFFS.open(static_files_manifest[i].name, FILE_WRITE);
+		file.print(static_files_manifest[i].data);
+		file.close();
+	}
+	
 	server.begin();
-	//Serial.println("HTTP server started");
+	ESP_LOGI("WebPage::WebPage","HTTP server started");
 //
 	/*
     server.on("/", 0b00000001, [](AsyncWebServerRequest *request){
@@ -201,8 +216,8 @@ void WebPage::initalize(){
 		unlock();
 
     });*/
-	valuesSem = xSemaphoreCreateMutex();
-	xSemaphoreGive(valuesSem);
+	//valuesSem = xSemaphoreCreateMutex();
+	//xSemaphoreGive(valuesSem);
     ws.onEvent(onWsEvent);
     server.addHandler(&ws);
     server.on("/pidvalues", 0b00000001, [](AsyncWebServerRequest *request){
@@ -227,14 +242,22 @@ void WebPage::initalize(){
     	Serial.println(url);
     	// lookup our file
     	if (url == "/") url = "/index.html";
-    	for(int i=0; i<static_files_manifest_count; i++){
-    		if(url.equals(static_files_manifest[i].name)){
+    	//for(int i=0; i<static_files_manifest_count; i++){
+    	//	if(url.equals(static_files_manifest[i].name)){
     			// This is turbo broken?
-    			request->send(200, (char*)static_files_manifest[i].mime, static_files_manifest[i].data);
+				//Serial.println((char*)static_files_manifest[i].mime);
+				//Serial.println((char*)static_files_manifest[i].data);
+				
+    			//request->send(200, (char*)static_files_manifest[i].mime, static_files_manifest[i].data);
+				//request->send()
+				//String path = "/"+String(static_files_manifest[i].name);
+				Serial.println(url);
+				request->send(SPIFFS, url);//, (char*)static_files_manifest[i].mime);
+				vTaskDelay(100);
 
-    		}
+    		//}
 
-    	}
+    	//}
 		unlock();
 
     });
@@ -247,7 +270,7 @@ void WebPage::initalize(){
           NULL,  /* Task input parameter */
           4,  /* Priority of the task */
           &thisPage->updateTaskHandle,  /* Task handle. */
-          1); /* Core where the task should run */
+          0); /* Core where the task should run */
 
 
 
@@ -295,7 +318,7 @@ void WebPage::setJoystickValue(float xpos, float ypos, float angle, float mag){
 }
 
 void WebPage::setValue(String name, float data){
-	while (xSemaphoreTake(valuesSem,( TickType_t ) 10)==false);
+	//while (xSemaphoreTake(valuesSem,( TickType_t ) 10)==false);
 	if(abs(data)<0.00001)
 		data=0;
 	for(int i=0; i<numValues; i++){
@@ -307,7 +330,7 @@ void WebPage::setValue(String name, float data){
 						values[i].value = data; // update data
 						values[i].valueDirty=true;
 					}
-					xSemaphoreGive(valuesSem);
+					//xSemaphoreGive(valuesSem);
 					return;
 				}
 			} else {
@@ -320,7 +343,7 @@ void WebPage::setValue(String name, float data){
 				values[i].labelDirty=true;
 				values[i].buffer=0;
 				numValuesUsed++;
-				xSemaphoreGive(valuesSem);
+				//xSemaphoreGive(valuesSem);
 				return;
 			}
 	}
@@ -419,7 +442,7 @@ bool WebPage::SendAllValues(){
 bool WebPage::SendAllLabels(){
 	// are any of our labels dirty?
 	if (dirtyLabels()==false) return false; // No? don't continue.
-	if (xSemaphoreTake(valuesSem,( TickType_t ) 10)==false) return false;
+	//if (xSemaphoreTake(valuesSem,( TickType_t ) 10)==false) return false;
 	uint32_t lengthPredict = labelBufferSize;
 	uint8_t * labelBuffer = new uint8_t[lengthPredict]; // Allocate a buffer
 
@@ -444,7 +467,7 @@ bool WebPage::SendAllLabels(){
 	}
 
 	if (bufferItemCount==0) {
-		xSemaphoreGive(valuesSem);
+		//xSemaphoreGive(valuesSem);
 		return false; // Nothing to update, bail.
 	}
 	// Write number of labels.
@@ -465,7 +488,7 @@ bool WebPage::SendAllLabels(){
 			//Serial.println("Strings won't fit into buffer!");
 			//Serial.println("target: "+String(startOfStringData+stringOffset+values[index].name.length()));
 			//Serial.println("limit:  "+String(labelBufferSize));
-			xSemaphoreGive(valuesSem);
+			//xSemaphoreGive(valuesSem);
 			return false;
 		}
 		//Serial.print("Processing #"+String(i)+"  len: "+String(length)+"... ");
@@ -480,7 +503,7 @@ bool WebPage::SendAllLabels(){
 	//Serial.println("Total Bytes Predicted: '"+String(lengthPredict)+"'");
 	uint32_t packetLength = startOfStringData+stringOffset;
 	packetLength += (4-(packetLength%4));
-	xSemaphoreGive(valuesSem);
+	//xSemaphoreGive(valuesSem);
 	if (bufferItemCount>0){
 		// We have at least 1 item, lets send a packet.
 		if (sendPacket(labelBuffer,packetLength)){
